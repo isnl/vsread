@@ -1,0 +1,62 @@
+{
+  "name": "my-sidebar",
+  "displayName": "My Sidebar Demo",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:mySidebarView"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "my-sidebar",
+          "title": "My Sidebar",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "my-sidebar": [
+        {
+          "id": "mySidebarView",
+          "name": "Demo View"
+        },
+        {
+          "id": "textPreview",
+          "name": "文本预览",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "extension.sayHello",
+        "title": "Say Hello"
+      },
+      {
+        "command": "textView.openFile",
+        "title": "打开文本文件"
+      },
+      {
+        "command": "textView.replaceFile",
+        "title": "替换文本文件"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^4.9.4"
+  }
+}
