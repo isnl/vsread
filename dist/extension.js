@@ -23,6 +23,7 @@ function activate(context) {
         });
         if (fileUri && fileUri[0]) {
             textPreviewProvider.loadFile(fileUri[0].fsPath);
+            treeDataProvider.addToHistory(fileUri[0].fsPath);
         }
     }));
     // 注册替换文件命令
@@ -41,6 +42,7 @@ function activate(context) {
         });
         if (fileUri && fileUri[0]) {
             textPreviewProvider.loadFile(fileUri[0].fsPath);
+            treeDataProvider.addToHistory(fileUri[0].fsPath);
         }
     }));
     // 注册命令

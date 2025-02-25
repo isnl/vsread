@@ -17,6 +17,29 @@ class DemoTreeDataProvider {
     constructor() {
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+        this._history = [];
+        this._historyLimit = 10;
+        this._loadHistory();
+    }
+    _loadHistory() {
+        const config = vscode.workspace.getConfiguration('textPreview');
+        this._history = config.get('history', []);
+    }
+    _saveHistory() {
+        const config = vscode.workspace.getConfiguration('textPreview');
+        config.update('history', this._history, true);
+    }
+    addToHistory(filePath) {
+        // 移除已存在的相同路径
+        this._history = this._history.filter(path => path !== filePath);
+        // 添加到开头
+        this._history.unshift(filePath);
+        // 限制历史记录数量
+        if (this._history.length > this._historyLimit) {
+            this._history = this._history.slice(0, this._historyLimit);
+        }
+        this._saveHistory();
+        this.refresh();
     }
     refresh() {
         this._onDidChangeTreeData.fire(undefined);
@@ -28,13 +51,17 @@ class DemoTreeDataProvider {
         if (element) {
             return Promise.resolve([]);
         }
+        const historyItems = this._history.map(filePath => {
+            const fileName = filePath.split('/').pop() || filePath;
+            return new DemoTreeItem(fileName, vscode.TreeItemCollapsibleState.None, {
+                command: 'textView.openFile',
+                title: '打开文件',
+                arguments: [{ fsPath: filePath }]
+            });
+        });
         return Promise.resolve([
-            new DemoTreeItem('Hello World', vscode.TreeItemCollapsibleState.None, {
-                command: 'extension.sayHello',
-                title: 'Say Hello',
-                arguments: []
-            }),
-            new DemoTreeItem('Parent Item', vscode.TreeItemCollapsibleState.Collapsed)
+            new DemoTreeItem('历史记录', vscode.TreeItemCollapsibleState.Expanded),
+            ...historyItems
         ]);
     }
 }

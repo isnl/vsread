@@ -27,6 +27,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       if (fileUri && fileUri[0]) {
         textPreviewProvider.loadFile(fileUri[0].fsPath);
+        treeDataProvider.addToHistory(fileUri[0].fsPath);
       }
     })
   );
@@ -50,6 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       if (fileUri && fileUri[0]) {
         textPreviewProvider.loadFile(fileUri[0].fsPath);
+        treeDataProvider.addToHistory(fileUri[0].fsPath);
       }
     })
   );

@@ -1,6 +1,18 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 
+interface WebviewMessage {
+  type: 'nextPage' | 'prevPage' | 'jumpToPage' | 'openFile' | 'replaceFile';
+  page?: string | number;
+}
+
+interface UpdateMessage {
+  type: 'update';
+  content: string;
+  currentPage: number;
+  totalPages: number;
+}
+
 export class TextPreviewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private _currentFile?: string;
@@ -8,8 +20,23 @@ export class TextPreviewProvider implements vscode.WebviewViewProvider {
   private _linesPerPage: number = 20;
   private _totalPages: number = 0;
   private _content: string[] = [];
+  private readonly _storageKey = 'textPreview.state';
 
-  constructor(private readonly _extensionUri: vscode.Uri) {}
+  constructor(private readonly _extensionUri: vscode.Uri) {
+    this._loadState();
+  }
+
+  private _loadState() {
+    const state = vscode.workspace.getConfiguration('textPreview');
+    this._currentPage = state.get('currentPage', 1);
+    this._linesPerPage = state.get('linesPerPage', 20);
+  }
+
+  private _saveState() {
+    const config = vscode.workspace.getConfiguration('textPreview');
+    config.update('currentPage', this._currentPage, true);
+    config.update('linesPerPage', this._linesPerPage, true);
+  }
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -24,15 +51,25 @@ export class TextPreviewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this._getHtmlForWebview();
 
-    webviewView.webview.onDidReceiveMessage(async (data) => {
+    webviewView.webview.onDidReceiveMessage(async (data: WebviewMessage) => {
       switch (data.type) {
         case 'nextPage':
           this._currentPage = Math.min(this._currentPage + 1, this._totalPages);
           this._updateContent();
+          this._saveState();
           break;
         case 'prevPage':
           this._currentPage = Math.max(this._currentPage - 1, 1);
           this._updateContent();
+          this._saveState();
+          break;
+        case 'jumpToPage':
+          const page = parseInt(data.page as string);
+          if (!isNaN(page) && page >= 1 && page <= this._totalPages) {
+            this._currentPage = page;
+            this._updateContent();
+            this._saveState();
+          }
           break;
         case 'openFile':
           const fileUri = await vscode.window.showOpenDialog({
@@ -76,6 +113,7 @@ export class TextPreviewProvider implements vscode.WebviewViewProvider {
       this._content = content.split('\n');
       this._totalPages = Math.ceil(this._content.length / this._linesPerPage);
       this._updateContent();
+      this._saveState();
     } catch (error) {
       vscode.window.showErrorMessage(`Error loading file: ${error}`);
     }
@@ -113,6 +151,8 @@ export class TextPreviewProvider implements vscode.WebviewViewProvider {
           button { margin-right: 5px; }
           .page-info { display: inline-block; margin-left: 10px; }
           .file-controls { margin-bottom: 10px; }
+          .page-jump { display: inline-block; margin-left: 10px; }
+          .page-jump input { width: 50px; margin-right: 5px; }
         </style>
       </head>
       <body>
@@ -124,6 +164,10 @@ export class TextPreviewProvider implements vscode.WebviewViewProvider {
           <button onclick="prevPage()">上一页</button>
           <button onclick="nextPage()">下一页</button>
           <span class="page-info">页码: <span id="pageInfo">-/-</span></span>
+          <div class="page-jump">
+            <input type="number" id="pageInput" min="1" placeholder="页码">
+            <button onclick="jumpToPage()">跳转</button>
+          </div>
         </div>
         <pre id="content"></pre>
         <script>
@@ -135,23 +179,35 @@ export class TextPreviewProvider implements vscode.WebviewViewProvider {
               case 'update':
                 document.getElementById('content').textContent = message.content;
                 document.getElementById('pageInfo').textContent = \`\${message.currentPage}/\${message.totalPages}\`;
+                const pageInput = document.getElementById('pageInput');
+                if (pageInput) {
+                  pageInput.setAttribute('max', message.totalPages.toString());
+                }
                 break;
             }
           });
 
-          function prevPage() {
+          window.prevPage = function() {
             vscode.postMessage({ type: 'prevPage' });
           }
 
-          function nextPage() {
+          window.nextPage = function() {
             vscode.postMessage({ type: 'nextPage' });
           }
 
-          function openFile() {
+          window.jumpToPage = function() {
+            const pageInput = document.getElementById('pageInput');
+            const page = pageInput ? pageInput.value : '';
+            if (page) {
+              vscode.postMessage({ type: 'jumpToPage', page });
+            }
+          }
+
+          window.openFile = function() {
             vscode.postMessage({ type: 'openFile' });
           }
 
-          function replaceFile() {
+          window.replaceFile = function() {
             vscode.postMessage({ type: 'replaceFile' });
           }
         </script>

@@ -10,6 +10,18 @@ class TextPreviewProvider {
         this._linesPerPage = 20;
         this._totalPages = 0;
         this._content = [];
+        this._storageKey = 'textPreview.state';
+        this._loadState();
+    }
+    _loadState() {
+        const state = vscode.workspace.getConfiguration('textPreview');
+        this._currentPage = state.get('currentPage', 1);
+        this._linesPerPage = state.get('linesPerPage', 20);
+    }
+    _saveState() {
+        const config = vscode.workspace.getConfiguration('textPreview');
+        config.update('currentPage', this._currentPage, true);
+        config.update('linesPerPage', this._linesPerPage, true);
     }
     resolveWebviewView(webviewView, context, _token) {
         this._view = webviewView;
@@ -23,10 +35,20 @@ class TextPreviewProvider {
                 case 'nextPage':
                     this._currentPage = Math.min(this._currentPage + 1, this._totalPages);
                     this._updateContent();
+                    this._saveState();
                     break;
                 case 'prevPage':
                     this._currentPage = Math.max(this._currentPage - 1, 1);
                     this._updateContent();
+                    this._saveState();
+                    break;
+                case 'jumpToPage':
+                    const page = parseInt(data.page);
+                    if (!isNaN(page) && page >= 1 && page <= this._totalPages) {
+                        this._currentPage = page;
+                        this._updateContent();
+                        this._saveState();
+                    }
                     break;
                 case 'openFile':
                     const fileUri = await vscode.window.showOpenDialog({
@@ -70,6 +92,7 @@ class TextPreviewProvider {
             this._content = content.split('\n');
             this._totalPages = Math.ceil(this._content.length / this._linesPerPage);
             this._updateContent();
+            this._saveState();
         }
         catch (error) {
             vscode.window.showErrorMessage(`Error loading file: ${error}`);
@@ -104,6 +127,8 @@ class TextPreviewProvider {
           button { margin-right: 5px; }
           .page-info { display: inline-block; margin-left: 10px; }
           .file-controls { margin-bottom: 10px; }
+          .page-jump { display: inline-block; margin-left: 10px; }
+          .page-jump input { width: 50px; margin-right: 5px; }
         </style>
       </head>
       <body>
@@ -115,6 +140,10 @@ class TextPreviewProvider {
           <button onclick="prevPage()">上一页</button>
           <button onclick="nextPage()">下一页</button>
           <span class="page-info">页码: <span id="pageInfo">-/-</span></span>
+          <div class="page-jump">
+            <input type="number" id="pageInput" min="1" placeholder="页码">
+            <button onclick="jumpToPage()">跳转</button>
+          </div>
         </div>
         <pre id="content"></pre>
         <script>
@@ -126,23 +155,35 @@ class TextPreviewProvider {
               case 'update':
                 document.getElementById('content').textContent = message.content;
                 document.getElementById('pageInfo').textContent = \`\${message.currentPage}/\${message.totalPages}\`;
+                const pageInput = document.getElementById('pageInput');
+                if (pageInput) {
+                  pageInput.setAttribute('max', message.totalPages.toString());
+                }
                 break;
             }
           });
 
-          function prevPage() {
+          window.prevPage = function() {
             vscode.postMessage({ type: 'prevPage' });
           }
 
-          function nextPage() {
+          window.nextPage = function() {
             vscode.postMessage({ type: 'nextPage' });
           }
 
-          function openFile() {
+          window.jumpToPage = function() {
+            const pageInput = document.getElementById('pageInput');
+            const page = pageInput ? pageInput.value : '';
+            if (page) {
+              vscode.postMessage({ type: 'jumpToPage', page });
+            }
+          }
+
+          window.openFile = function() {
             vscode.postMessage({ type: 'openFile' });
           }
 
-          function replaceFile() {
+          window.replaceFile = function() {
             vscode.postMessage({ type: 'replaceFile' });
           }
         </script>
