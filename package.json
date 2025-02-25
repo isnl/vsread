@@ -17,7 +17,7 @@
       "activitybar": [
         {
           "id": "my-sidebar",
-          "title": "My Sidebar",
+          "title": "文本阅读器",
           "icon": "media/icon.svg"
         }
       ]
@@ -26,7 +26,7 @@
       "my-sidebar": [
         {
           "id": "mySidebarView",
-          "name": "Demo View"
+          "name": "历史记录"
         },
         {
           "id": "textPreview",
@@ -42,11 +42,11 @@
       },
       {
         "command": "textView.openFile",
-        "title": "打开文本文件"
+        "title": "打开文件"
       },
       {
         "command": "textView.replaceFile",
-        "title": "替换文本文件"
+        "title": "替换文件"
       }
     ]
   },
@@ -55,8 +55,14 @@
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
+    "@types/html-to-text": "^9.0.4",
     "@types/node": "^22.13.5",
     "@types/vscode": "^1.75.0",
     "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "epub": "^1.3.0",
+    "html-to-text": "^9.0.5",
+    "pdf-parse": "^1.1.1"
   }
 }

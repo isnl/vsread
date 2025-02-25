@@ -13,6 +13,11 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.registerWebviewViewProvider('textPreview', textPreviewProvider)
   );
 
+  // 监听文件加载事件，更新历史记录
+  textPreviewProvider.onDidLoadFile(filePath => {
+    treeDataProvider.addToHistory(filePath);
+  });
+
   // 注册打开文件命令
   context.subscriptions.push(
     vscode.commands.registerCommand('textView.openFile', async () => {
@@ -21,7 +26,11 @@ export function activate(context: vscode.ExtensionContext) {
         canSelectFolders: false,
         canSelectMany: false,
         filters: {
-          'Text Files': ['txt']
+          '所有支持的格式': ['txt', 'epub', 'mobi', 'pdf', 'md', 'html', 'htm'],
+          '文本文件': ['txt', 'md'],
+          '电子书': ['epub', 'mobi'],
+          'PDF文档': ['pdf'],
+          '网页文件': ['html', 'htm']
         }
       });
 
@@ -45,7 +54,11 @@ export function activate(context: vscode.ExtensionContext) {
         canSelectFolders: false,
         canSelectMany: false,
         filters: {
-          'Text Files': ['txt']
+          '所有支持的格式': ['txt', 'epub', 'mobi', 'pdf', 'md', 'html', 'htm'],
+          '文本文件': ['txt', 'md'],
+          '电子书': ['epub', 'mobi'],
+          'PDF文档': ['pdf'],
+          '网页文件': ['html', 'htm']
         }
       });
 
@@ -67,6 +80,15 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('extension.refresh', () => {
       treeDataProvider.refresh();
+    })
+  );
+
+  // 注册历史记录文件打开命令
+  context.subscriptions.push(
+    vscode.commands.registerCommand('textView.openHistoryFile', (filePath: string) => {
+      // 直接加载文件，不需要显示文件选择对话框
+      textPreviewProvider.loadFile(filePath);
+      // 不需要再次添加到历史记录，因为loadFile会触发onDidLoadFile事件
     })
   );
 }
