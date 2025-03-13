@@ -128,6 +128,20 @@ class TextPreviewProvider {
                         vscode.window.showWarningMessage('请先打开一个文件');
                     }
                     break;
+                case 'setLinesPerPage':
+                    if (data.linesPerPage && typeof data.linesPerPage === 'number' && data.linesPerPage > 0) {
+                        this._linesPerPage = data.linesPerPage;
+                        // 重新计算总页数
+                        this._totalPages = Math.ceil(this._content.length / this._linesPerPage);
+                        // 确保当前页码有效
+                        if (this._currentPage > this._totalPages) {
+                            this._currentPage = this._totalPages || 1;
+                        }
+                        this._updateContent();
+                        this._updatePageForCurrentFile();
+                        this._saveState();
+                    }
+                    break;
             }
         });
     }
@@ -172,9 +186,10 @@ class TextPreviewProvider {
             this._totalPages = Math.ceil(this._content.length / this._linesPerPage);
             // 确保页码在有效范围内
             if (this._currentPage > this._totalPages) {
-                this._currentPage = 1;
+                this._currentPage = Math.max(1, this._totalPages);
             }
             this._updateContent();
+            this._updatePageForCurrentFile();
             this._saveState();
             // 触发文件加载事件
             this._onDidLoadFile.fire(filePath);
@@ -186,49 +201,59 @@ class TextPreviewProvider {
     // 加载 EPUB 文件
     async _loadEpub(filePath) {
         return new Promise((resolve, reject) => {
-            const book = new epub_1.default(filePath);
-            book.on('error', reject);
-            book.on('end', () => {
-                // 初始化内容数组
-                this._content = [];
-                // 获取章节
-                // 修复类型错误，使用适当的类型定义
-                if (book.spine && book.spine.contents) {
-                    // 使用 any 类型来避免类型检查错误
-                    const contents = book.spine.contents;
-                    // 处理每个章节
-                    contents.forEach((item, index) => {
-                        // 获取章节ID
-                        const chapterId = typeof item === 'string' ? item : item.id;
-                        book.getChapter(chapterId, (error, text) => {
-                            if (error) {
-                                reject(error);
-                                return;
-                            }
-                            // 将 HTML 转换为纯文本
-                            const plainText = (0, html_to_text_1.htmlToText)(text, {
-                                wordwrap: null,
-                                selectors: [
-                                    { selector: 'a', options: { ignoreHref: true } },
-                                    { selector: 'img', format: 'skip' }
-                                ]
+            try {
+                const book = new epub_1.default(filePath);
+                book.on('end', () => {
+                    // 初始化内容数组
+                    this._content = [];
+                    // 获取章节
+                    if (book.spine && book.spine.contents) {
+                        // 使用正确的类型
+                        const contents = book.spine.contents;
+                        // 处理每个章节
+                        contents.forEach((item, index) => {
+                            // 获取章节ID
+                            const chapterId = item.id;
+                            book.getChapter(chapterId, (error, text) => {
+                                if (error) {
+                                    reject(error);
+                                    return;
+                                }
+                                if (!text) {
+                                    console.error('章节内容为空');
+                                    return;
+                                }
+                                // 将 HTML 转换为纯文本
+                                const plainText = (0, html_to_text_1.htmlToText)(text, {
+                                    wordwrap: null,
+                                    selectors: [
+                                        { selector: 'a', options: { ignoreHref: true } },
+                                        { selector: 'img', format: 'skip' }
+                                    ]
+                                });
+                                // 添加章节内容
+                                if (index === 0) {
+                                    this._content = plainText.split('\n');
+                                }
+                                else {
+                                    this._content = this._content.concat(['', '--- 新章节 ---', ''], plainText.split('\n'));
+                                }
+                                // 更新总页数和内容
+                                this._totalPages = Math.ceil(this._content.length / this._linesPerPage);
+                                this._updateContent();
                             });
-                            // 添加章节内容
-                            if (index === 0) {
-                                this._content = plainText.split('\n');
-                            }
-                            else {
-                                this._content = this._content.concat(['', '--- 新章节 ---', ''], plainText.split('\n'));
-                            }
-                            // 更新总页数和内容
-                            this._totalPages = Math.ceil(this._content.length / this._linesPerPage);
-                            this._updateContent();
                         });
-                    });
-                }
-                resolve();
-            });
-            book.parse();
+                    }
+                    resolve();
+                });
+                book.on('error', (error) => {
+                    reject(error);
+                });
+                book.parse();
+            }
+            catch (error) {
+                reject(error);
+            }
         });
     }
     // 加载 PDF 文件
@@ -289,7 +314,8 @@ class TextPreviewProvider {
             type: 'update',
             content: currentContent,
             currentPage: this._currentPage,
-            totalPages: this._totalPages
+            totalPages: this._totalPages,
+            linesPerPage: this._linesPerPage
         });
     }
     // 在页码变化的地方更新映射
@@ -427,6 +453,29 @@ class TextPreviewProvider {
           .content-container {
             padding: 0 8px 8px 8px;
           }
+          
+          /* 添加设置控件的样式 */
+          .settings-control {
+            display: flex;
+            align-items: center;
+            margin-top: 8px;
+            padding: 0 8px;
+          }
+          
+          .settings-control label {
+            margin-right: 8px;
+            font-size: 13px;
+          }
+          
+          .settings-control input {
+            width: 60px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--vscode-input-border);
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            margin-right: 8px;
+          }
         </style>
       </head>
       <body>
@@ -463,6 +512,12 @@ class TextPreviewProvider {
           </div>
         </div>
         
+        <div class="settings-control">
+          <label for="linesPerPageInput">每页行数:</label>
+          <input type="number" id="linesPerPageInput" min="1" max="100" value="20">
+          <button onclick="setLinesPerPage()">应用</button>
+        </div>
+        
         <div class="content-container">
           <pre id="content"></pre>
         </div>
@@ -480,6 +535,12 @@ class TextPreviewProvider {
                 if (pageInput) {
                   pageInput.setAttribute('max', message.totalPages.toString());
                   pageInput.placeholder = \`1-\${message.totalPages}\`;
+                }
+                
+                // 设置每页行数输入框的值
+                const linesPerPageInput = document.getElementById('linesPerPageInput');
+                if (linesPerPageInput && message.linesPerPage) {
+                  linesPerPageInput.value = message.linesPerPage.toString();
                 }
                 break;
             }
@@ -504,6 +565,14 @@ class TextPreviewProvider {
 
           window.openFile = function() {
             vscode.postMessage({ type: 'openFile' });
+          }
+          
+          window.setLinesPerPage = function() {
+            const linesInput = document.getElementById('linesPerPageInput');
+            const lines = linesInput ? parseInt(linesInput.value) : 20;
+            if (lines && lines > 0) {
+              vscode.postMessage({ type: 'setLinesPerPage', linesPerPage: lines });
+            }
           }
         </script>
       </body>

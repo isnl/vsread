@@ -1,6 +1,6 @@
 {
-  "name": "my-sidebar",
-  "displayName": "My Sidebar Demo",
+  "name": "vsread",
+  "displayName": "vsread,a text reader, support epub and txt",
   "version": "1.0.0",
   "engines": {
     "vscode": "^1.75.0"
@@ -17,7 +17,7 @@
       "activitybar": [
         {
           "id": "my-sidebar",
-          "title": "文本阅读器",
+          "title": "VsRead",
           "icon": "media/icon.svg"
         }
       ]
@@ -25,30 +25,42 @@
     "views": {
       "my-sidebar": [
         {
-          "id": "mySidebarView",
-          "name": "历史记录"
-        },
-        {
-          "id": "textPreview",
-          "name": "文本预览",
+          "id": "vsread",
+          "name": "VsRead",
           "type": "webview"
         }
       ]
     },
     "commands": [
       {
-        "command": "extension.sayHello",
-        "title": "Say Hello"
-      },
-      {
-        "command": "textView.openFile",
+        "command": "vsread.openFile",
         "title": "打开文件"
       },
       {
-        "command": "textView.replaceFile",
-        "title": "替换文件"
+        "command": "vsread.toggleBossKey",
+        "title": "切换老板键"
       }
-    ]
+    ],
+    "keybindings": [
+      {
+        "command": "vsread.toggleBossKey",
+        "key": "cmd+shift+space",
+        "mac": "cmd+shift+space",
+        "when": "viewItem == vsread || view == vsread"
+      }
+    ],
+    "filters": {
+      "所有支持的格式": [
+        "txt",
+        "epub"
+      ],
+      "文本文件": [
+        "txt"
+      ],
+      "电子书": [
+        "epub"
+      ]
+    }
   },
   "scripts": {
     "compile": "tsc -p ./",
@@ -64,5 +76,9 @@
     "epub": "^1.3.0",
     "html-to-text": "^9.0.5",
     "pdf-parse": "^1.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/isnl/vsread.git"
   }
 }

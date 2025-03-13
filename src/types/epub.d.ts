@@ -1,4 +1,15 @@
 declare module 'epub' {
+  interface EPubChapter {
+    id: string;
+    href: string;
+    title?: string;
+  }
+
+  interface EPubFlow {
+    id: string;
+    href: string;
+  }
+
   interface TocElement {
     id: string;
     order: number;
@@ -13,17 +24,20 @@ declare module 'epub' {
   }
 
   class EPub {
-    constructor(epubfile: string, imagewebroot?: string, chapterwebroot?: string);
+    constructor(filePath: string);
     
-    spine: EpubSpine;
-    
-    on(event: 'end', callback: () => void): void;
-    on(event: 'error', callback: (err: Error) => void): void;
-    on(event: string, callback: Function): void;
+    flow: Array<{ id: string; href: string }>;
+    spine: { contents: Array<{ id: string; href: string }> };
     
     parse(): void;
     
-    getChapter(chapterId: string, callback: (error: Error | null, text: string) => void): void;
+    getChapter(
+      chapterId: string, 
+      callback: (error: Error | null, text: string | null) => void
+    ): void;
+    
+    on(event: 'end', listener: () => void): this;
+    on(event: 'error', listener: (error: Error) => void): this;
     
     getImage(id: string, callback: (error: Error | null, data: Buffer, mimeType: string) => void): void;
     

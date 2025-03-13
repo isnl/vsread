@@ -83,7 +83,7 @@ class DemoTreeDataProvider {
             const date = new Date(item.lastAccessed);
             const formattedDate = `${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
             const treeItem = new DemoTreeItem(fileName, vscode.TreeItemCollapsibleState.None, {
-                command: 'textView.openHistoryFile',
+                command: 'vsread.openHistoryFile',
                 title: '打开文件',
                 arguments: [item.filePath]
             });

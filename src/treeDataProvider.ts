@@ -84,7 +84,7 @@ export class DemoTreeDataProvider implements vscode.TreeDataProvider<DemoTreeIte
         fileName,
         vscode.TreeItemCollapsibleState.None,
         {
-          command: 'textView.openHistoryFile',
+          command: 'vsread.openHistoryFile',
           title: '打开文件',
           arguments: [item.filePath]
         }
