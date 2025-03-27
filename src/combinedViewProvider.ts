@@ -15,7 +15,7 @@ interface HistoryItem {
 }
 
 interface WebviewMessage {
-  type: 'nextPage' | 'prevPage' | 'jumpToPage' | 'openFile' | 'replaceFile' | 'openHistoryFile' | 'toggleBossKey';
+  type: 'nextPage' | 'prevPage' | 'jumpToPage' | 'openFile' | 'replaceFile' | 'openHistoryFile' | 'toggleBossKey' | 'webviewReady';
   page?: string | number;
   filePath?: string;
   active?: boolean;
@@ -96,6 +96,17 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this._getHtmlForWebview();
 
     webviewView.webview.onDidReceiveMessage(async (data: WebviewMessage) => {
+      // 处理 webview 准备好的消息
+      if (data.type === 'webviewReady') {
+        console.log('Webview 已准备好，正在更新历史记录和内容');
+        // 初始化时更新历史记录和内容
+        this._updateHistory();
+        if (this._currentFile) {
+          this._updateContent();
+        }
+        return;
+      }
+
       switch (data.type) {
         case 'nextPage':
           this._currentPage = Math.min(this._currentPage + 1, this._totalPages);
@@ -128,12 +139,6 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
           break;
       }
     });
-    
-    // 初始化时更新历史记录和内容
-    this._updateHistory();
-    if (this._currentFile) {
-      this._updateContent();
-    }
   }
 
   public async loadFile(filePath: string) {
@@ -979,6 +984,11 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
           // 添加双击蒙版事件处理
           document.getElementById('bossKeyOverlay').addEventListener('dblclick', () => {
             vscode.postMessage({ type: 'toggleBossKey' });
+          });
+
+          // 添加这段代码，通知扩展 webview 已准备好
+          window.addEventListener('DOMContentLoaded', () => {
+            vscode.postMessage({ type: 'webviewReady' });
           });
         </script>
       </body>

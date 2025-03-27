@@ -68,7 +68,7 @@ MIT
 ## 更多信息
 
 - [GitHub 仓库](https://github.com/isnl/vsread)
-- [VS Code 扩展市场](https://marketplace.visualstudio.com/items?itemName=isnl.vsread)
+- [VS Code 扩展市场](https://marketplace.visualstudio.com/items?itemName=vsread.vsread)
 
 ---
 
