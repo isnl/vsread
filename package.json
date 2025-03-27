@@ -4,7 +4,7 @@
   "description": "A text reader extension for VS Code that supports .epub and .txt formats. 这是一个文本阅读器，支持epub和txt格式。",
   "author": "Peanut",
   "publisher": "vsread",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.75.0"

@@ -41,6 +41,11 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
     private readonly _context: vscode.ExtensionContext
   ) {
     this._loadState();
+    
+    // 注册一个事件处理程序，在视图变为可见时自动恢复上次阅读的文件
+    vscode.window.onDidChangeVisibleTextEditors(() => {
+      this._autoRestoreLastReadingState();
+    });
   }
 
   private _loadState() {
@@ -140,6 +145,20 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
           break;
       }
     });
+
+    // 注册视图状态变化事件
+    webviewView.onDidChangeVisibility(() => {
+      if (webviewView.visible) {
+        // 视图变为可见时，更新历史记录和内容
+        this._updateHistory();
+        if (this._currentFile) {
+          this._updateContent();
+        } else {
+          // 如果没有当前文件，尝试恢复上次阅读状态
+          this._autoRestoreLastReadingState();
+        }
+      }
+    });
   }
 
   public async loadFile(filePath: string) {
@@ -185,6 +204,9 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
       
       // 确保保存当前状态
       await this._updatePageForCurrentFile();
+      
+      // 保存最后阅读的文件路径
+      await this._context.globalState.update('textReader.lastReadFile', filePath);
       
     } catch (error) {
       console.error('加载文件失败:', error);
@@ -252,7 +274,8 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
     
     this._view.webview.postMessage({
       type: 'updateHistory',
-      history: this._history
+      history: this._history,
+      currentFile: this._currentFile
     });
   }
 
@@ -411,6 +434,23 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
     if (switchToExplorer && this._bossKeyActive) {
       // 使用 VS Code API 切换到资源管理器视图
       vscode.commands.executeCommand('workbench.view.explorer');
+    }
+  }
+
+  // 添加自动恢复上次阅读状态的方法
+  private async _autoRestoreLastReadingState() {
+    // 如果已经有打开的文件，不执行恢复
+    if (this._currentFile) {
+      return;
+    }
+    
+    // 从状态中获取上次阅读的文件
+    const lastReadFile = this._context.globalState.get<string>('textReader.lastReadFile');
+    
+    // 如果有上次阅读的文件，并且文件存在，则自动打开
+    if (lastReadFile && fs.existsSync(lastReadFile)) {
+      console.log(`自动恢复上次阅读的文件: ${lastReadFile}`);
+      await this.loadFile(lastReadFile);
     }
   }
 
@@ -600,6 +640,10 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
           }
           
           .navigation-controls {
@@ -775,6 +819,38 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
           .boss-key-overlay:hover .boss-key-message {
             opacity: 0.7;
           }
+          
+          /* 添加禁用文本选择的样式 */
+          .no-select {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+          }
+          
+          /* 允许选择的区域 */
+          .allow-select {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+          }
+          
+          /* 默认允许文本选择 */
+          pre#content {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+          }
+          
+          /* 禁用其他区域的文本选择 */
+          .navigation-controls, .bookshelf-container, .header {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+          }
         </style>
       </head>
       <body>
@@ -783,7 +859,7 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
           <div class="boss-key-message">双击此处或再次按下快捷键恢复</div>
         </div>
         
-        <div class="container">
+        <div class="container no-select">
           <!-- 移除原来的header中的打开文件按钮 -->
           <div class="header">
             <div class="bookshelf-title">书架</div>
@@ -828,7 +904,7 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
                 <div class="empty-state-text">还没有打开任何文件</div>
                 <button onclick="openFile()">打开文件</button>
               </div>
-              <pre id="content" style="display: none;"></pre>
+              <pre id="content" class="allow-select" style="display: none;"></pre>
             </div>
           </div>
         </div>
@@ -913,8 +989,8 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
                             <path fill="currentColor" d="M8 6h8v2H8V6zm0 4h8v2H8v-2zm0 4h8v2H8v-2z"/>
                           </svg>\`;
                       
-                      // 检查是否是当前正在阅读的文件
-                      const isActive = currentFile === item.filePath;
+                      // 检查是否是当前正在阅读的文件 - 使用消息中传递的 currentFile
+                      const isActive = message.currentFile === item.filePath;
                       
                       return \`
                         <div class="book-card \${isActive ? 'active' : ''}" onclick="vscode.postMessage({ type: 'openHistoryFile', filePath: '\${item.filePath}'})">
@@ -970,35 +1046,118 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
             // 为内容容器添加点击事件
             const contentContainer = document.querySelector('.content-container');
             if (contentContainer) {
+              // 添加点击延迟处理，解决单击和双击冲突
+              let clickTimer = null;
+              let preventSingleClick = false;
+              
               contentContainer.addEventListener('click', (event) => {
-                // 获取点击位置相对于容器的水平位置
+                // 如果是双击触发的，则不处理单击
+                if (preventSingleClick) {
+                  return;
+                }
+                
+                // 延迟处理单击事件，给双击事件留出时间
+                clickTimer = setTimeout(() => {
+                  // 获取点击位置相对于容器的水平位置
+                  const containerWidth = contentContainer.clientWidth;
+                  const clickX = event.clientX - contentContainer.getBoundingClientRect().left;
+                  
+                  // 如果点击在左侧 40% 区域，执行上一页
+                  if (clickX < containerWidth * 0.4) {
+                    prevPage();
+                  } 
+                  // 如果点击在右侧 40% 区域，执行下一页
+                  else if (clickX > containerWidth * 0.6) {
+                    nextPage();
+                  }
+                  // 中间 20% 区域不做操作，可以用于选择文本等
+                }, 200); // 200ms 延迟，可以根据需要调整
+              });
+
+              // 修改双击事件处理，清除选中的文本
+              contentContainer.addEventListener('dblclick', (event) => {
+                // 清除任何选中的文本
+                window.getSelection().removeAllRanges();
+                
+                // 取消延迟的单击事件
+                clearTimeout(clickTimer);
+                // 标记阻止单击事件
+                preventSingleClick = true;
+                
+                // 切换老板键并跳转到资源管理器
+                vscode.postMessage({ type: 'toggleBossKey', switchToExplorer: true });
+                
+                // 重置标记（延迟一点，确保单击事件已经被处理）
+                setTimeout(() => {
+                  preventSingleClick = false;
+                }, 10);
+              });
+
+              // 添加中间区域点击事件，切换文本选择功能
+              contentContainer.addEventListener('mousedown', (event) => {
                 const containerWidth = contentContainer.clientWidth;
                 const clickX = event.clientX - contentContainer.getBoundingClientRect().left;
                 
-                // 如果点击在左侧 40% 区域，执行上一页
-                if (clickX < containerWidth * 0.4) {
-                  prevPage();
-                } 
-                // 如果点击在右侧 40% 区域，执行下一页
-                else if (clickX > containerWidth * 0.6) {
-                  nextPage();
+                // 如果点击在中间 20% 区域，启用文本选择
+                if (clickX >= containerWidth * 0.4 && clickX <= containerWidth * 0.6) {
+                  toggleTextSelection(true);
+                } else {
+                  // 否则禁用文本选择，避免拖动时选中文本
+                  toggleTextSelection(false);
                 }
-                // 中间 20% 区域不做操作，可以用于选择文本等
               });
-
-              // 修改双击事件处理，切换老板键并跳转到资源管理器
-              contentContainer.addEventListener('dblclick', () => {
-                vscode.postMessage({ type: 'toggleBossKey', switchToExplorer: true });
+              
+              // 鼠标释放时恢复文本选择功能
+              document.addEventListener('mouseup', () => {
+                toggleTextSelection(true);
               });
             }
 
-            // 为内容元素也添加双击事件
+            // 为内容元素也添加类似的处理
             const contentElement = document.getElementById('content');
             if (contentElement) {
+              let contentClickTimer = null;
+              let contentPreventSingleClick = false;
+              
+              contentElement.addEventListener('click', (event) => {
+                // 阻止冒泡，避免触发容器的点击事件
+                event.stopPropagation();
+                
+                if (contentPreventSingleClick) {
+                  return;
+                }
+                
+                contentClickTimer = setTimeout(() => {
+                  // 获取点击位置相对于容器的水平位置
+                  const containerWidth = contentElement.clientWidth;
+                  const clickX = event.clientX - contentElement.getBoundingClientRect().left;
+                  
+                  // 如果点击在左侧 40% 区域，执行上一页
+                  if (clickX < containerWidth * 0.4) {
+                    prevPage();
+                  } 
+                  // 如果点击在右侧 40% 区域，执行下一页
+                  else if (clickX > containerWidth * 0.6) {
+                    nextPage();
+                  }
+                }, 200);
+              });
+              
               contentElement.addEventListener('dblclick', (event) => {
                 // 阻止事件冒泡，避免触发容器的双击事件
                 event.stopPropagation();
+                // 取消延迟的单击事件
+                clearTimeout(contentClickTimer);
+                // 标记阻止单击事件
+                contentPreventSingleClick = true;
+                
+                // 切换老板键并跳转到资源管理器
                 vscode.postMessage({ type: 'toggleBossKey', switchToExplorer: true });
+                
+                // 重置标记
+                setTimeout(() => {
+                  contentPreventSingleClick = false;
+                }, 10);
               });
             }
           });
@@ -1012,6 +1171,20 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
           window.addEventListener('DOMContentLoaded', () => {
             vscode.postMessage({ type: 'webviewReady' });
           });
+
+          // 添加切换文本选择功能的函数
+          function toggleTextSelection(enable) {
+            const contentElement = document.getElementById('content');
+            if (contentElement) {
+              if (enable) {
+                contentElement.classList.add('allow-select');
+                contentElement.classList.remove('no-select');
+              } else {
+                contentElement.classList.add('no-select');
+                contentElement.classList.remove('allow-select');
+              }
+            }
+          }
         </script>
       </body>
       </html>
