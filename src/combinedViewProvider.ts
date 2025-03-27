@@ -19,6 +19,7 @@ interface WebviewMessage {
   page?: string | number;
   filePath?: string;
   active?: boolean;
+  switchToExplorer?: boolean;
 }
 
 export class CombinedViewProvider implements vscode.WebviewViewProvider {
@@ -135,7 +136,7 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'toggleBossKey':
-          this.toggleBossKey();
+          this.toggleBossKey(data.switchToExplorer);
           break;
       }
     });
@@ -397,7 +398,7 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
   }
 
   // 添加切换老板键的方法
-  public toggleBossKey(): void {
+  public toggleBossKey(switchToExplorer: boolean = false): void {
     if (!this._view) return;
     
     this._bossKeyActive = !this._bossKeyActive;
@@ -405,6 +406,12 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
       type: 'toggleBossKey',
       active: this._bossKeyActive
     });
+    
+    // 如果需要切换到资源管理器
+    if (switchToExplorer && this._bossKeyActive) {
+      // 使用 VS Code API 切换到资源管理器视图
+      vscode.commands.executeCommand('workbench.view.explorer');
+    }
   }
 
   private _getHtmlForWebview(): string {
@@ -978,12 +985,27 @@ export class CombinedViewProvider implements vscode.WebviewViewProvider {
                 }
                 // 中间 20% 区域不做操作，可以用于选择文本等
               });
+
+              // 修改双击事件处理，切换老板键并跳转到资源管理器
+              contentContainer.addEventListener('dblclick', () => {
+                vscode.postMessage({ type: 'toggleBossKey', switchToExplorer: true });
+              });
+            }
+
+            // 为内容元素也添加双击事件
+            const contentElement = document.getElementById('content');
+            if (contentElement) {
+              contentElement.addEventListener('dblclick', (event) => {
+                // 阻止事件冒泡，避免触发容器的双击事件
+                event.stopPropagation();
+                vscode.postMessage({ type: 'toggleBossKey', switchToExplorer: true });
+              });
             }
           });
 
-          // 添加双击蒙版事件处理
+          // 修改蒙版双击事件，恢复显示但不切换回阅读器
           document.getElementById('bossKeyOverlay').addEventListener('dblclick', () => {
-            vscode.postMessage({ type: 'toggleBossKey' });
+            vscode.postMessage({ type: 'toggleBossKey', switchToExplorer: false });
           });
 
           // 添加这段代码，通知扩展 webview 已准备好
